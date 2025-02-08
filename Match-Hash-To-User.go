@@ -2,6 +2,7 @@ package main
 
 import (
         "bufio"
+        "encoding/hex"
         "fmt"
         "os"
         "regexp"
@@ -11,20 +12,28 @@ import (
 
 // Configurable settings
 const (
-        hashFilePath      = "/home/elemental/Pass-Hashes/hashcat.potfile" // Path to cracked hashes
-        outputFilePath    = "Cracked"                          // Output file
-        passwordMinLength = 5                                  // Filter: Only save passwords longer than X chars
-        numWorkers        = 10                                 // Number of concurrent workers for processing NTDS
+        passwordMinLength = 1  // Filter: Only save passwords longer than X chars
+        numWorkers        = 10 // Number of concurrent workers for processing NTDS
 )
+
+func decodeHex(hexStr string) (string, error) {
+        decoded, err := hex.DecodeString(hexStr)
+        if err != nil {
+                return "", err
+        }
+        return string(decoded), nil
+}
 
 func main() {
         // Ensure correct usage
-        if len(os.Args) < 2 {
-                fmt.Println("Usage: ./match-user-to-pass NTDS-DUMP")
+        if len(os.Args) < 4 {
+                fmt.Println("Usage: ./match-hash-to-user NTDS-DUMP HASHCAT-POTFILE OUTPUT-FILE")
                 os.Exit(1)
         }
 
         ntdsFile := os.Args[1]
+        hashFilePath := os.Args[2]
+        outputFilePath := os.Args[3]
 
         // Compile regex for NTLM hash validation
         ntlmRegex := regexp.MustCompile(`(?i)^[0-9a-f]{32}$`)
@@ -42,11 +51,17 @@ func main() {
         scanner := bufio.NewScanner(hashFileHandle)
         for scanner.Scan() {
                 line := strings.TrimSpace(scanner.Text())
-                parts := strings.SplitN(line, ":", 2) // Ensure only two parts: NTLM hash & password
-
+                parts := strings.SplitN(line, ":", 2)
                 if len(parts) == 2 && ntlmRegex.MatchString(parts[0]) {
                         password := strings.TrimSpace(parts[1])
-                        if len(password) >= passwordMinLength { // Only store passwords that meet length criteria
+                        if strings.HasPrefix(strings.ToUpper(password), "$HEX[") {
+                                hexValue := strings.TrimSuffix(strings.TrimPrefix(password, "$HEX["), "]")
+                                decoded, err := decodeHex(hexValue)
+                                if err == nil {
+                                        password = decoded
+                                }
+                        }
+                        if len(password) >= passwordMinLength {
                                 hashes[parts[0]] = password
                         }
                 }
@@ -76,8 +91,8 @@ func main() {
         writer := bufio.NewWriter(outputHandle)
 
         // Concurrent processing with a worker pool
-        lines := make(chan string, 100) // Channel to pass NTDS lines
-        results := make(chan string, 100) // Channel for matched results
+        lines := make(chan string, 100)
+        results := make(chan string, 100)
         var wg sync.WaitGroup
 
         // Worker function
@@ -113,16 +128,19 @@ func main() {
         for scanner.Scan() {
                 lines <- scanner.Text()
         }
-        close(lines) // Signal workers that no more data is coming
+        close(lines)
 
         // Wait for workers to finish processing
         wg.Wait()
-        close(results) // Signal the result writer to finish
+        close(results)
 
         if err := scanner.Err(); err != nil {
                 fmt.Println("Error reading NTDS-DUMP file:", err)
                 os.Exit(1)
         }
+
+        fmt.Println("Matching complete! Results saved to:", outputFilePath)
+}
 
         fmt.Println("Matching complete! Results saved to:", outputFilePath)
 }
