@@ -10,4 +10,4 @@ A script that quicky matches a user's NTLM hash from NTDS.DIT dump and finds it 
 ## Build
 go build -o match-hash-to-user match-hash-to-user.go
 ## Usage
-./match-hash-to-user <NTDS-DUMP HASHCAT-POTFILE OUTPUT-FILE> 
+./match-hash-to-user NTDS-DUMP HASHCAT-POTFILE OUTPUT-FILE
