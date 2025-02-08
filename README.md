@@ -4,7 +4,7 @@ These scripts can quickly turn your hashcat potfile into a wordlist to use for f
 ## Usage
 python3 clean_and_copy.py
 
-
+# Match Hash To User
 A script that quicky matches a user's NTLM hash from NTDS.DIT dump and finds it in the potfile. 
 
 ## Build
